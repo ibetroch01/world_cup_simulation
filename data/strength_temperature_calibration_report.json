@@ -1,0 +1,87 @@
+{
+  "selection_metric": "rolling_total_test_nll",
+  "best_half_life_days": 730.0,
+  "best_regularization_alpha": 0.001,
+  "best_strength_temperature": 0.8,
+  "rolling_total_nll": 5935.451894367665,
+  "main_holdout_nll": 3494.725569854171,
+  "main_holdout": {
+    "train_start_date": "2022-01-01",
+    "train_end_date": "2024-12-31",
+    "test_start_date": "2025-01-01",
+    "test_end_date": "2026-06-09",
+    "test_matches_before_missing_rating_exclusion": 1308,
+    "test_matches": 1210,
+    "excluded_test_matches": 98,
+    "holdout_nll": 3494.725569854171,
+    "observed_goals_per_match": 2.793388429752066,
+    "predicted_goals_per_match": 2.7484715884117583,
+    "observed_draw_rate": 0.22975206611570248,
+    "predicted_draw_rate": 0.22257017947319935
+  },
+  "rolling_folds": [
+    {
+      "fold": "test_2024",
+      "train_start_date": "2022-01-01",
+      "train_end_date": "2023-12-31",
+      "test_start_date": "2024-01-01",
+      "test_end_date": "2024-12-31",
+      "nll": 2425.2268551667885,
+      "test_matches_before_missing_rating_exclusion": 1231,
+      "test_matches": 872,
+      "excluded_test_matches": 359,
+      "observed_goals_per_match": 2.5470183486238533,
+      "predicted_goals_per_match": 2.546253398547464,
+      "observed_draw_rate": 0.2626146788990826,
+      "predicted_draw_rate": 0.23870123617479985
+    },
+    {
+      "fold": "test_2025",
+      "train_start_date": "2022-01-01",
+      "train_end_date": "2024-12-31",
+      "test_start_date": "2025-01-01",
+      "test_end_date": "2025-12-31",
+      "nll": 2661.8748244844337,
+      "test_matches_before_missing_rating_exclusion": 1002,
+      "test_matches": 920,
+      "excluded_test_matches": 82,
+      "observed_goals_per_match": 2.8184782608695653,
+      "predicted_goals_per_match": 2.7751281568205868,
+      "observed_draw_rate": 0.21956521739130436,
+      "predicted_draw_rate": 0.2193378400926656
+    },
+    {
+      "fold": "test_2026",
+      "train_start_date": "2022-01-01",
+      "train_end_date": "2025-12-31",
+      "test_start_date": "2026-01-01",
+      "test_end_date": "2026-06-09",
+      "nll": 848.3502147164427,
+      "test_matches_before_missing_rating_exclusion": 306,
+      "test_matches": 299,
+      "excluded_test_matches": 7,
+      "observed_goals_per_match": 2.702341137123746,
+      "predicted_goals_per_match": 2.6698847832784214,
+      "observed_draw_rate": 0.25752508361204013,
+      "predicted_draw_rate": 0.23358037400374188
+    }
+  ],
+  "half_life_grid": [
+    180.0,
+    365.0,
+    500.0,
+    730.0
+  ],
+  "regularization_grid": [
+    0.001,
+    0.01,
+    0.05,
+    0.1
+  ],
+  "gamma_grid": [
+    0.8,
+    0.9,
+    1.0
+  ],
+  "min_matches_per_team": 15
+}

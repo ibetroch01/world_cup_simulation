@@ -1,28 +1,98 @@
-# FIFA World Cup 2026 Simulator
+# FIFA World Cup 2026 Attack/Defence Simulator
 
-Python + Streamlit Monte Carlo dashboard for the 48-team FIFA World Cup 2026 format.
+CLI-first Monte Carlo simulator for the 48-team FIFA World Cup 2026 format. The Streamlit app is a results dashboard only: it reads the precomputed `outputs/attack_defence_baseline` folder and does not train models or run simulations.
 
-## Run
+## Workflow
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+Build the historical match dataset:
+
+```bash
+python scripts/build_historical_matches_dataset.py \
+  --start-date 2022-01-01 \
+  --output data/historical_matches.csv
+```
+
+Train the Attack/Defence model:
+
+```bash
+python scripts/train_attack_defence.py \
+  --matches data/historical_matches.csv \
+  --output-ratings data/team_attack_defence_ratings.csv \
+  --output-report data/model_training_report.json \
+  --start-date 2022-01-01 \
+  --half-life-days 730 \
+  --regularization-alpha 0.01
+```
+
+Calibrate regularization and strength temperature:
+
+```bash
+python scripts/calibrate_strength_temperature.py \
+  --matches data/historical_matches.csv \
+  --train-start-date 2022-01-01 \
+  --train-end-date 2024-12-31 \
+  --test-start-date 2025-01-01 \
+  --half-life-grid 180,365,500,730 \
+  --regularization-grid 0.001,0.01,0.05,0.1 \
+  --gamma-grid 0.8,0.9,1.0
+```
+
+By default this also runs rolling backtests:
+
+- Train 2022-2023, test 2024
+- Train 2022-2024, test 2025
+- Train 2022-2025, test 2026 through the latest available match date
+
+The chosen parameters minimize test Poisson NLL. Add `--output-grid data/strength_temperature_grid.csv` if you want to save every fold/grid row.
+
+Run the tournament simulation:
+
+```bash
+python scripts/run_simulations.py \
+  --runs 100000 \
+  --seed 42 \
+  --output-dir outputs/attack_defence_baseline
+```
+
+Start the dashboard:
+
+```bash
 streamlit run app.py
 ```
 
-## Model Assumptions
+## Outputs
+
+Each simulation output folder contains:
+
+- `metadata.json`
+- `group_phase_results.csv`
+- `knockout_phase_results.csv`
+- `team_ratings.csv`
+
+The dashboard uses `outputs/attack_defence_baseline` by default.
+
+## Model Notes
 
 - This is Monte Carlo simulation, not MCMC.
-- Elo is fixed unless `Update Elo during tournament` is enabled.
-- Goals are generated from a Poisson model with fixed total expected goals and Elo-based goal share.
-- Draws arise naturally from equal Poisson scores.
-- Knockout draws after 90 minutes are resolved by Elo-weighted advancement.
-- Dynamic Elo updates, when enabled, use only the 90-minute result, not the penalty winner.
-- Fair play is represented as a deterministic placeholder score of zero.
-- Annex C third-place mapping is required for exact bracket loading. If the mapping CSV is incomplete or invalid, the simulator raises a clear error instead of approximating silently.
+- The dashboard only displays precomputed outputs.
+- Attack/Defence training uses 2022-now match results with 90-minute scores only.
+- Penalty shootout results and extra-time goals are excluded from historical training data.
+- Training uses recency weighting, competition weighting, and L2 regularization.
+- Calibration selects `half_life_days`, `regularization_alpha`, and `strength_temperature` by holdout Poisson NLL, not by World Cup winner probabilities.
+- Current defaults use `regularization_alpha=0.01`, `strength_temperature=0.83`, and `penalty_damping=900`.
+- Knockout draws after 90 minutes are resolved by Elo-weighted advancement using `data/initial_elo.csv`.
+- The model is simplified and should be validated by backtesting before being treated as reliable.
+- Annex C third-place mapping is required for exact bracket correctness. If the mapping CSV is incomplete or invalid, the simulator raises a clear error instead of approximating silently.
 
 ## Data
 
-The app expects:
+Tournament setup files:
 
 - `data/teams.csv`: `team_id,team_name,group,fifa_rank`
 - `data/groups.csv`: `group,team_id`
@@ -30,7 +100,13 @@ The app expects:
 - `data/fifa_r32_slots.csv`: `match_id,slot_a,slot_b`
 - `data/fifa_third_place_mapping.csv`: `qualified_third_groups,match_id,third_group`
 
-`data/fifa_third_place_mapping.csv` contains 495 qualifying third-place combinations and eight match assignments per combination. The table was transcribed from Annexe C of FIFA's May 2026 `FWC2026_regulations_EN.pdf`, with the public knockout-stage table used as a parsing cross-check.
+Attack/Defence model files:
+
+- `data/historical_matches.csv`
+- `data/historical_90min_overrides.csv`
+- `data/team_attack_defence_ratings.csv`
+- `data/model_training_report.json`
+- `data/strength_temperature_calibration_report.json`
 
 ## Tests
 

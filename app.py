@@ -1,474 +1,388 @@
 from __future__ import annotations
 
-import base64
-from dataclasses import replace
 from html import escape
 from pathlib import Path
-import secrets
 
 import pandas as pd
 import streamlit as st
 
-from src.config import SimulationConfig
-from src.data_loader import load_all_data
+from src.config import ROOT_DIR
+from src.data_loader import load_initial_elos, load_teams
 from src.flags import team_label
-from src.simulation import run_simulations, simulate_sample_by_index
-from src.ui_theme import apply_fan_festival_theme
+from src.results_loader import list_output_folders, load_simulation_output
+from src.ui_theme import apply_minimal_theme
 
 
-st.set_page_config(page_title="World Cup 2026 Simulator", layout="wide")
-apply_fan_festival_theme()
+st.set_page_config(page_title="World Cup 2026 Results", layout="wide")
+apply_minimal_theme()
 
-HEADER_IMAGE_PATH = Path(__file__).parent / "assets" / "worldcup-header.png"
-DEFAULT_N_SIMULATIONS = 50_000
+OUTPUTS_DIR = ROOT_DIR / "outputs"
+CURRENT_OUTPUT_FOLDER = "attack_defence_baseline"
+GROUP_PROBABILITY_COLUMNS = ["p_place_1", "p_place_2", "p_place_3", "p_place_4", "p_r32", "p_eliminated_group"]
+KNOCKOUT_PROBABILITY_COLUMNS = ["p_r32", "p_r16", "p_qf", "p_sf", "p_final", "p_champion"]
+GROUP_COLUMN_LABELS = {
+    "team": "Team",
+    "p_place_1": "1st",
+    "p_place_2": "2nd",
+    "p_place_3": "3rd",
+    "p_place_4": "4th",
+    "p_r32": "R32",
+    "p_eliminated_group": "Out",
+}
+KNOCKOUT_COLUMN_LABELS = {
+    "team": "Team",
+    "group": "Group",
+    "elo": "ELO",
+    "attack_score": "Off.",
+    "defence_score": "Def.",
+    "p_r32": "Round of 32",
+    "p_r16": "Round of 16",
+    "p_qf": "Quarter-finals",
+    "p_sf": "Semi-finals",
+    "p_final": "Final",
+    "p_champion": "Champion",
+}
 
 
 @st.cache_data(show_spinner=False)
-def cached_default_data():
-    teams, elos, slots, mapping = load_all_data()
-    elo_df = pd.DataFrame([{"team_id": team_id, "elo": elo} for team_id, elo in elos.items()])
-    return teams, elo_df, slots, mapping
-
-
-def probability_column_config(columns: list[str]) -> dict[str, st.column_config.NumberColumn]:
-    return {column: st.column_config.NumberColumn(column, format="%.1f%%") for column in columns}
-
-
-def as_percent_display(df: pd.DataFrame, probability_columns: list[str]) -> pd.DataFrame:
-    display_df = df.copy()
-    for column in probability_columns:
-        if column in display_df.columns:
-            display_df[column] = display_df[column] * 100.0
-    return display_df
-
-
-def pct(value: float) -> str:
-    return f"{100.0 * float(value):.1f}%"
+def cached_teams() -> pd.DataFrame:
+    return load_teams()
 
 
 @st.cache_data(show_spinner=False)
-def image_data_uri(path: str, modified_at: float) -> str:
-    image_bytes = Path(path).read_bytes()
-    encoded = base64.b64encode(image_bytes).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
+def cached_elos() -> dict[str, float]:
+    return load_initial_elos()
 
 
-def render_hero() -> None:
-    if not HEADER_IMAGE_PATH.exists():
-        st.error(f"Header image not found: {HEADER_IMAGE_PATH}")
-        return
-    modified_at = HEADER_IMAGE_PATH.stat().st_mtime
-    st.markdown(
-        '<div class="wc-header-shell">'
-        f'<img class="wc-header-image" src="{image_data_uri(str(HEADER_IMAGE_PATH), modified_at)}" alt="World Cup 2026 Monte Carlo Dashboard header">'
-        "</div>",
-        unsafe_allow_html=True,
+@st.cache_data(show_spinner=False)
+def cached_output(path: str, modified_token: float):
+    return load_simulation_output(Path(path))
+
+
+def format_probability(value: float) -> str:
+    return f"{value * 100.0:.1f}%"
+
+
+def format_rating(value: float) -> str:
+    return "-" if pd.isna(value) else f"{value:.3f}"
+
+
+def format_elo(value: float) -> str:
+    return "-" if pd.isna(value) else f"{value:.0f}"
+
+
+def rating_text_cell(value: float, *, lower: float, upper: float, higher_is_good: bool) -> str:
+    color = heat_color(value, lower=lower, upper=upper, higher_is_good=higher_is_good)
+    return f'<span class="rating-text-scale" style="color:{color};">{escape(format_rating(value))}</span>'
+
+
+def heat_color(value: float, *, lower: float = 0.0, upper: float = 1.0, higher_is_good: bool = True) -> str:
+    if pd.isna(value):
+        return "#f3f4f6"
+    if upper <= lower:
+        score = 0.5
+    else:
+        score = max(0.0, min(1.0, (float(value) - lower) / (upper - lower)))
+    if not higher_is_good:
+        score = 1.0 - score
+    # Red -> amber -> green. Kept muted enough for a minimal dashboard, but clear at a glance.
+    stops = [
+        (0.0, (127, 29, 29)),
+        (0.5, (180, 127, 31)),
+        (1.0, (20, 83, 45)),
+    ]
+    left, right = stops[0], stops[-1]
+    for idx in range(len(stops) - 1):
+        if stops[idx][0] <= score <= stops[idx + 1][0]:
+            left, right = stops[idx], stops[idx + 1]
+            break
+    span = right[0] - left[0]
+    mix = 0.0 if span == 0 else (score - left[0]) / span
+    rgb = tuple(round(left[1][channel] + (right[1][channel] - left[1][channel]) * mix) for channel in range(3))
+    return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
+
+
+def plain_probability_cell(value: float) -> str:
+    return f'<span class="plain-probability">{escape(format_probability(value))}</span>'
+
+
+def green_probability_cell(value: float) -> str:
+    clamped = max(0.0, min(1.0, float(value)))
+    alpha = 0.08 + clamped * 0.28
+    return (
+        f'<span class="green-probability" style="background:rgba(90, 160, 82, {alpha:.3f});">'
+        f"{escape(format_probability(value))}"
+        "</span>"
     )
 
 
-def render_card_title(title: str, pill: str | None = None) -> None:
-    pill_html = f'<span class="wc-pill">{escape(pill)}</span>' if pill else ""
-    st.markdown(
-        f'<div class="wc-card-title"><span>{escape(title)}</span>{pill_html}</div>',
-        unsafe_allow_html=True,
-    )
+def team_label_from_name(team_name: str, name_to_id: dict[str, str]) -> str:
+    team_id = name_to_id.get(team_name)
+    return team_label(team_id, team_name) if team_id else team_name
 
 
-def add_team_labels(df: pd.DataFrame) -> pd.DataFrame:
-    labelled = df.copy()
-    labelled["Team"] = labelled.apply(lambda row: team_label(str(row["team_id"]), str(row["team_name"])), axis=1)
-    return labelled
+def render_note(message: str) -> None:
+    st.markdown(f'<div class="minimal-note">{escape(message)}</div>', unsafe_allow_html=True)
 
 
-def render_group_card(group: str, group_df: pd.DataFrame) -> None:
-    rows = []
-    for row in group_df.sort_values(["fifa_rank", "team_name"]).itertuples(index=False):
-        label = team_label(str(row.team_id), str(row.team_name))
-        elo = f"{float(row.elo):.0f}" if pd.notna(row.elo) else "NA"
-        rows.append(
-            '<div class="wc-team-row">'
-            f'<div class="wc-team-main">{escape(label)}</div>'
-            f'<div class="wc-team-meta">Elo {escape(elo)}</div>'
-            f'<div class="wc-rank-chip">#{int(row.fifa_rank)}</div>'
-            "</div>"
-        )
-    rows_html = "".join(rows)
-    st.markdown(
-        '<div class="wc-card wc-group-card">'
-        '<div class="wc-card-title">'
-        f"<span>Group {escape(group)}</span>"
-        "</div>"
-        f"{rows_html}"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+def build_group_display(group_phase: pd.DataFrame, name_to_id: dict[str, str]) -> pd.DataFrame:
+    display = group_phase.copy()
+    display["p_r32"] = display["p_advance_group"] + display["p_advance_best_third"]
+    display = display[
+        [
+            "team",
+            "p_place_1",
+            "p_place_2",
+            "p_place_3",
+            "p_place_4",
+            "p_r32",
+            "p_eliminated_group",
+        ]
+    ]
+    display["team"] = display["team"].map(lambda value: team_label_from_name(str(value), name_to_id))
+    return display
 
 
-def render_control_scoreboard(config: SimulationConfig, n_simulations: int) -> None:
-    dynamic = "Dynamic" if config.update_elo_during_tournament else "Fixed"
-    st.markdown(
-        '<div class="wc-control-grid">'
-        '<div class="wc-control-tile">'
-        '<div class="wc-control-label">Simulation runs</div>'
-        f'<div class="wc-control-value">{int(n_simulations):,}</div>'
-        '<div class="wc-control-unit">Monte Carlo</div>'
-        "</div>"
-        '<div class="wc-control-tile">'
-        '<div class="wc-control-label">Expected goals</div>'
-        f'<div class="wc-control-value">{config.total_expected_goals:.2f}</div>'
-        '<div class="wc-control-unit">total xG</div>'
-        "</div>"
-        '<div class="wc-control-tile">'
-        '<div class="wc-control-label">Goal damping</div>'
-        f'<div class="wc-control-value">{config.elo_goal_damping:.0f}</div>'
-        '<div class="wc-control-unit">Elo share</div>'
-        "</div>"
-        '<div class="wc-control-tile">'
-        '<div class="wc-control-label">Penalty damping</div>'
-        f'<div class="wc-control-value">{config.penalty_damping:.0f}</div>'
-        '<div class="wc-control-unit">advancement</div>'
-        "</div>"
-        '<div class="wc-control-tile">'
-        '<div class="wc-control-label">Seed</div>'
-        f'<div class="wc-control-value">{config.random_seed if config.random_seed is not None else "Random"}</div>'
-        '<div class="wc-control-unit">replay</div>'
-        "</div>"
-        '<div class="wc-control-tile">'
-        '<div class="wc-control-label">Elo mode</div>'
-        f'<div class="wc-control-value">{escape(dynamic)}</div>'
-        f'<div class="wc-control-unit">K {config.k_factor:.0f}</div>'
-        "</div>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def render_empty(message: str) -> None:
-    st.markdown(f'<div class="wc-empty">{escape(message)}</div>', unsafe_allow_html=True)
-
-
-FINISH_COLUMNS = [
-    ("Group", "P(Finish Group Stage)"),
-    ("R32", "P(Finish Round of 32)"),
-    ("R16", "P(Finish Round of 16)"),
-    ("QF", "P(Finish Quarterfinal)"),
-    ("SF", "P(Finish Semifinal)"),
-    ("Final", "P(Finish Final)"),
-    ("Champ", "P(Finish Champion)"),
-]
-
-
-def render_finish_card(row) -> None:
-    rows = []
-    for label, column in FINISH_COLUMNS:
-        value = float(getattr(row, column.replace(" ", "_").replace("(", "").replace(")", ""), 0.0))
-        rows.append(
-            '<div class="wc-prob-row">'
-            f'<span>{escape(label)}</span>'
-            '<div class="wc-prob-track">'
-            f'<div class="wc-prob-fill" style="width: {min(100.0, value * 100.0):.1f}%"></div>'
-            "</div>"
-            f'<strong>{pct(value)}</strong>'
-            "</div>"
-        )
-    team = team_label(str(row.team_id), str(row.team_name))
-    st.markdown(
-        '<div class="wc-card wc-group-card wc-result-card">'
-        '<div class="wc-card-title">'
-        f"<span>{escape(team)}</span>"
-        f'<span class="wc-rank-chip">Group {escape(str(row.group))}</span>'
-        "</div>"
-        f"{''.join(rows)}"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def render_finish_probabilities(probability_table: pd.DataFrame) -> None:
-    display_df = probability_table.copy()
-    safe_columns = {
-        column: column.replace(" ", "_").replace("(", "").replace(")", "")
-        for _, column in FINISH_COLUMNS
-    }
-    display_df = display_df.rename(columns=safe_columns)
-    columns = st.columns(4)
-    for ix, row in enumerate(display_df.itertuples(index=False)):
-        with columns[ix % 4]:
-            render_finish_card(row)
-
-
-def render_winner_probability(champion_table: pd.DataFrame) -> None:
-    max_probability = float(champion_table["champion_probability"].max()) if len(champion_table) else 0.0
-    rows = []
-    for row in add_team_labels(champion_table.head(20)).itertuples(index=False):
-        probability = float(row.champion_probability)
-        width = 0.0 if max_probability == 0 else min(100.0, 100.0 * probability / max_probability)
-        rows.append(
-            '<div class="wc-winner-row">'
-            f'<div class="wc-winner-team">{escape(row.Team)}</div>'
-            '<div class="wc-winner-track">'
-            f'<div class="wc-winner-fill" style="width: {width:.1f}%"></div>'
-            "</div>"
-            f'<div class="wc-winner-pct">{pct(probability)}</div>'
-            "</div>"
-        )
-    st.markdown(
-        '<div class="wc-card wc-group-card wc-winner-card">'
-        '<div class="wc-card-title"><span>Winner Probability</span></div>'
-        f"{''.join(rows)}"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def round_name(match_id: str) -> str:
-    number = int(match_id.replace("M", ""))
-    if 73 <= number <= 88:
-        return "Round of 32"
-    if 89 <= number <= 96:
-        return "Round of 16"
-    if 97 <= number <= 100:
-        return "Quarterfinals"
-    if 101 <= number <= 102:
-        return "Semifinals"
-    if number == 103:
-        return "Third Place"
-    return "Final"
-
-
-def render_match_card(match, team_names: dict[str, str]) -> None:
-    team_a = team_label(match.team_a, team_names.get(match.team_a, match.team_a))
-    team_b = team_label(match.team_b, team_names.get(match.team_b, match.team_b))
-    winner = team_label(str(match.winner), team_names.get(str(match.winner), str(match.winner)))
-    team_a_class = "wc-winner" if match.winner == match.team_a else ""
-    team_b_class = "wc-winner" if match.winner == match.team_b else ""
-    pens = '<span class="wc-pens">pens</span>' if match.decided_by_penalties else ""
-    st.markdown(
-        '<div class="wc-bracket-card">'
-        f'<div class="wc-match-id"><span>{escape(match.match_id)}</span>{pens}</div>'
-        '<div class="wc-scoreline">'
-        f'<span class="{team_a_class}">{escape(team_a)}</span>'
-        f'<span class="wc-score">{int(match.goals_a)}-{int(match.goals_b)}</span>'
-        f'<span class="{team_b_class}">{escape(team_b)}</span>'
-        "</div>"
-        f'<div class="wc-team-meta">Winner: {escape(winner)}</div>'
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def render_sample_group_card(group: str, table: pd.DataFrame, team_names: dict[str, str]) -> None:
-    rows = []
-    for row in table.itertuples(index=False):
-        team = team_label(str(row.team_id), team_names.get(str(row.team_id), str(row.team_name)))
-        rows.append(
-            '<div class="wc-sample-row">'
-            f'<div class="wc-rank-chip">{int(row.group_rank)}</div>'
-            f'<div class="wc-team-main">{escape(team)}</div>'
-            f'<div class="wc-team-meta">{int(row.points)} pts</div>'
-            f'<div class="wc-team-meta">GD {int(row.goal_difference):+d}</div>'
-            "</div>"
-        )
-    st.markdown(
-        '<div class="wc-card wc-group-card">'
-        '<div class="wc-card-title">'
-        f"<span>Group {escape(str(group))}</span>"
-        "</div>"
-        f"{''.join(rows)}"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def render_knockout(sample_result, teams: pd.DataFrame) -> None:
-    team_names = dict(zip(teams["team_id"], teams["team_name"]))
-    rounds = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Third Place", "Final"]
-    for stage in rounds:
-        matches = [match for match in sample_result.matches if round_name(match.match_id) == stage]
-        if not matches:
-            continue
-        st.markdown(f"### {stage}")
-        column_count = min(4, max(1, len(matches)))
-        columns = st.columns(column_count)
-        for ix, match in enumerate(matches):
-            with columns[ix % column_count]:
-                render_match_card(match, team_names)
-
-
-def store_simulation_results(
-    n_simulations: int,
-    teams: pd.DataFrame,
-    elos: dict[str, float],
-    slots: pd.DataFrame,
-    mapping: pd.DataFrame,
-    config: SimulationConfig,
-    progress_callback=None,
-) -> None:
-    run_config = config
-    if run_config.random_seed is None:
-        run_config = replace(run_config, random_seed=secrets.randbits(32))
-    probability_table, champion_table, sample_result = run_simulations(
-        int(n_simulations),
-        teams,
-        elos,
-        slots,
-        mapping,
-        run_config,
-        progress_callback=progress_callback,
-    )
-    st.session_state["probability_table"] = probability_table
-    st.session_state["champion_table"] = champion_table
-    st.session_state["sample_result"] = sample_result
-    st.session_state["run_config"] = run_config
-    st.session_state["run_n_simulations"] = int(n_simulations)
-
-
-default_teams, default_elo_df, r32_slots, third_mapping = cached_default_data()
-teams_df = default_teams.copy()
-elo_df = default_elo_df.copy()
-
-if st.session_state.pop("default_results_loaded", False):
-    for stale_result_key in ("probability_table", "champion_table", "sample_result", "run_config", "run_n_simulations"):
-        st.session_state.pop(stale_result_key, None)
-
-render_hero()
-
-setup_tab, groups_tab, results_tab, bracket_tab = st.tabs(["Setup", "Groups", "Results", "Bracket"])
-
-with setup_tab:
-    render_card_title("Matchday Control Room")
-
-    top_controls = st.columns(3, gap="large")
-    with top_controls[0]:
-        n_simulations = st.slider(
-            "Simulation runs",
-            min_value=1_000,
-            max_value=100_000,
-            value=DEFAULT_N_SIMULATIONS,
-            step=1_000,
-            key="setup_n_simulations_v2",
-        )
-    with top_controls[1]:
-        random_seed = st.slider("Random seed", min_value=0, max_value=1_000_000, value=42, step=1, key="setup_seed")
-    with top_controls[2]:
-        elo_mode = st.radio(
-            "Elo update mode",
-            ["Fixed Elo", "Dynamic Elo"],
-            horizontal=True,
-            key="setup_elo_mode",
-        )
-        update_elo = elo_mode == "Dynamic Elo"
-
-    model_controls = st.columns(4, gap="large")
-    with model_controls[0]:
-        total_expected_goals = st.slider(
-            "Total expected goals",
-            min_value=0.50,
-            max_value=5.00,
-            value=2.70,
-            step=0.05,
-            key="setup_total_expected_goals",
-        )
-    with model_controls[1]:
-        elo_goal_damping = st.slider(
-            "Elo goal damping",
-            min_value=200,
-            max_value=1600,
-            value=800,
-            step=25,
-            key="setup_elo_goal_damping",
-        )
-    with model_controls[2]:
-        penalty_damping = st.slider(
-            "Penalty damping",
-            min_value=200,
-            max_value=1600,
-            value=800,
-            step=25,
-            key="setup_penalty_damping",
-        )
-    with model_controls[3]:
-        k_factor = st.slider("K factor", min_value=0, max_value=80, value=30, step=1, key="setup_k_factor")
-
-    config = SimulationConfig(
-        total_expected_goals=float(total_expected_goals),
-        elo_goal_damping=float(elo_goal_damping),
-        update_elo_during_tournament=bool(update_elo),
-        k_factor=float(k_factor),
-        penalty_damping=float(penalty_damping),
-        random_seed=random_seed,
-    )
-    st.session_state["input_teams"] = teams_df
-    st.session_state["input_elos"] = dict(zip(elo_df["team_id"], elo_df["elo"].astype(float)))
-    st.session_state["sim_config"] = config
-    render_control_scoreboard(config, int(n_simulations))
-    if st.button("Run simulations", type="primary"):
-        progress = st.progress(0.0)
-        try:
-            store_simulation_results(
-                int(n_simulations),
-                st.session_state["input_teams"],
-                st.session_state["input_elos"],
-                r32_slots,
-                third_mapping,
-                config,
-                progress_callback=progress.progress,
-            )
-        except Exception as exc:
-            st.error(str(exc))
+def build_knockout_display(
+    knockout_phase: pd.DataFrame,
+    team_ratings: pd.DataFrame | None,
+    name_to_id: dict[str, str],
+    teams: pd.DataFrame | None = None,
+    initial_elos: dict[str, float] | None = None,
+) -> tuple[pd.DataFrame, bool]:
+    display = knockout_phase.copy()
+    has_ratings = team_ratings is not None and {"team", "attack_score", "defence_score"} <= set(team_ratings.columns)
+    team_metadata = pd.DataFrame()
+    if teams is not None:
+        team_metadata = teams[["team_id", "team_name", "group"]].rename(columns={"team_name": "team"}).copy()
+        if initial_elos is not None:
+            team_metadata["elo"] = team_metadata["team_id"].map(initial_elos)
         else:
-            st.success("Simulation complete.")
+            team_metadata["elo"] = pd.NA
+        display = display.merge(team_metadata[["team", "group", "elo"]], on="team", how="left")
+    if has_ratings:
+        ratings = team_ratings[["team", "attack_score", "defence_score"]].copy()
+        display = display.merge(ratings, on="team", how="left")
+        ordered_columns = [
+            "team",
+            "group",
+            "elo",
+            "attack_score",
+            "defence_score",
+            "p_r32",
+            "p_r16",
+            "p_qf",
+            "p_sf",
+            "p_final",
+            "p_champion",
+        ]
+    else:
+        ordered_columns = ["team"]
+        if "group" in display.columns:
+            ordered_columns.extend(["group", "elo"])
+        ordered_columns.extend(["p_r32", "p_r16", "p_qf", "p_sf", "p_final", "p_champion"])
+    display = display[ordered_columns].sort_values("p_champion", ascending=False).reset_index(drop=True)
+    display["team"] = display["team"].map(lambda value: team_label_from_name(str(value), name_to_id))
+    return display, bool(has_ratings)
 
-with groups_tab:
-    teams_view = st.session_state.get("input_teams", default_teams).merge(
-        pd.DataFrame(
-            [{"team_id": team_id, "elo": elo} for team_id, elo in st.session_state.get("input_elos", dict(zip(default_elo_df.team_id, default_elo_df.elo))).items()]
-        ),
-        on="team_id",
-        how="left",
+
+def render_group_phase(group_phase: pd.DataFrame, name_to_id: dict[str, str]) -> None:
+    display = build_group_display(group_phase, name_to_id)
+    grouped = list(group_phase.sort_values(["group", "p_place_1"], ascending=[True, False]).groupby("group"))
+    for row_start in range(0, len(grouped), 3):
+        columns = st.columns(3)
+        for column, (group, raw_group_df) in zip(columns, grouped[row_start : row_start + 3]):
+            with column:
+                group_display = display.loc[raw_group_df.index].copy()
+                st.markdown(render_group_table(str(group), group_display), unsafe_allow_html=True)
+
+
+def render_group_table(group: str, group_display: pd.DataFrame) -> str:
+    headers = "".join(f"<th>{escape(GROUP_COLUMN_LABELS[column])}</th>" for column in ["team", *GROUP_PROBABILITY_COLUMNS])
+    rows = []
+    for _, row in group_display.iterrows():
+        cells = [f'<td class="team-cell">{escape(str(row["team"]))}</td>']
+        for column in GROUP_PROBABILITY_COLUMNS:
+            cells.append(
+                '<td class="prob-cell">'
+                + plain_probability_cell(float(row[column]))
+                + "</td>"
+            )
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    return (
+        '<div class="minimal-card group-table-card">'
+        f'<div class="minimal-card-title">Group {escape(group)}</div>'
+        '<div class="minimal-table-wrap">'
+        '<table class="minimal-table group-prob-table">'
+        '<colgroup>'
+        '<col style="width:30%">'
+        '<col style="width:11.66%"><col style="width:11.66%"><col style="width:11.66%">'
+        '<col style="width:11.66%"><col style="width:11.66%"><col style="width:11.66%">'
+        "</colgroup>"
+        f"<thead><tr>{headers}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody>"
+        "</table>"
+        "</div>"
+        "</div>"
     )
-    st.markdown("### Groups A-L")
-    group_columns = st.columns(4)
-    for ix, (group, group_df) in enumerate(teams_view.sort_values(["group", "fifa_rank"]).groupby("group")):
-        with group_columns[ix % 4]:
-            render_group_card(str(group), group_df)
 
-with results_tab:
-    probability_table = st.session_state.get("probability_table")
-    champion_table = st.session_state.get("champion_table")
-    if probability_table is None or champion_table is None:
-        render_empty("Run a simulation first to unlock the finish probabilities and winner graph.")
-    else:
-        st.subheader("Finish Probabilities")
-        render_finish_probabilities(probability_table)
-        render_winner_probability(champion_table)
 
-with bracket_tab:
-    if st.session_state.get("sample_result") is None:
-        render_empty("Run a simulation first, then choose which sampled tournament bracket you want to inspect.")
-    else:
-        run_n_simulations = st.session_state.get("run_n_simulations", 1)
-        sample_index = st.number_input(
-            "Sample tournament",
-            min_value=1,
-            max_value=int(run_n_simulations),
-            value=1,
-            step=1,
-            help="Choose which simulation run from the latest batch to display.",
-        )
-        sample_result = simulate_sample_by_index(
-            int(sample_index),
-            st.session_state["input_teams"],
-            st.session_state["input_elos"],
-            r32_slots,
-            third_mapping,
-            st.session_state.get("run_config", st.session_state["sim_config"]),
-        )
-        st.subheader("Sample Group Tables")
-        team_names = dict(zip(st.session_state["input_teams"]["team_id"], st.session_state["input_teams"]["team_name"]))
-        group_columns = st.columns(4)
-        for group, table in sample_result.group_tables.items():
-            with group_columns[(ord(str(group)) - ord("A")) % 4]:
-                render_sample_group_card(str(group), table, team_names)
-        st.subheader("Sample Knockout Bracket")
-        render_knockout(sample_result, st.session_state["input_teams"])
+def render_knockout_phase(
+    knockout_phase: pd.DataFrame,
+    team_ratings: pd.DataFrame | None,
+    name_to_id: dict[str, str],
+    teams: pd.DataFrame,
+    initial_elos: dict[str, float],
+) -> None:
+    display, has_ratings = build_knockout_display(knockout_phase, team_ratings, name_to_id, teams, initial_elos)
+    if not has_ratings:
+        render_note("This output folder has no team_ratings.csv. Showing round probabilities without attack/defence scores.")
+    sort_options = {
+        "Champion": "p_champion",
+        "Final": "p_final",
+        "Semi-finals": "p_sf",
+        "Quarter-finals": "p_qf",
+        "Round of 16": "p_r16",
+        "Round of 32": "p_r32",
+        "Off.": "attack_score",
+        "Def.": "defence_score",
+        "ELO": "elo",
+        "Group": "group",
+        "Team": "team",
+    }
+    available_sort_options = {label: column for label, column in sort_options.items() if column in display.columns}
+    sort_cols = st.columns([2.4, 1, 6], gap="small")
+    with sort_cols[0]:
+        sort_label = st.selectbox("Sort by", list(available_sort_options), index=0, key="knockout_sort_column")
+    with sort_cols[1]:
+        descending = st.toggle("Desc", value=True, key="knockout_sort_desc")
+    sorted_display = display.sort_values(
+        available_sort_options[sort_label],
+        ascending=not descending,
+        kind="mergesort",
+        na_position="last",
+    )
+    st.markdown(render_knockout_table(sorted_display, has_ratings), unsafe_allow_html=True)
+
+
+def render_knockout_table(display: pd.DataFrame, has_ratings: bool) -> str:
+    columns = display.columns.tolist()
+    rating_bounds = {}
+    for column in ("attack_score", "defence_score"):
+        if column in display:
+            values = pd.to_numeric(display[column], errors="coerce")
+            rating_bounds[column] = (float(values.min()), float(values.max()))
+    team_rating_span = len([column for column in columns if column in {"group", "elo", "attack_score", "defence_score"}])
+    probability_span = len([column for column in columns if column in KNOCKOUT_PROBABILITY_COLUMNS])
+    team_rating_header = (
+        f'<th colspan="{team_rating_span}" class="team-info-head">Team Rating</th>' if team_rating_span else ""
+    )
+    section_header = (
+        '<tr class="section-header">'
+        "<th></th>"
+        f"{team_rating_header}"
+        f'<th colspan="{probability_span}" class="simulation-info-head">Chances To Reach Knockout Stage</th>'
+        "</tr>"
+    )
+    header_cells = []
+    for column in columns:
+        classes = []
+        if column in {"group", "elo", "attack_score", "defence_score"}:
+            classes.append("team-info-header")
+        if column in KNOCKOUT_PROBABILITY_COLUMNS:
+            classes.append("simulation-header")
+        if column == "p_r32":
+            classes.append("simulation-start")
+        class_attr = f' class="{" ".join(classes)}"' if classes else ""
+        header_cells.append(f"<th{class_attr}>{escape(KNOCKOUT_COLUMN_LABELS.get(column, column))}</th>")
+    header = "".join(header_cells)
+    rows = []
+    for _, row in display.iterrows():
+        cells = []
+        for column in columns:
+            if column == "team":
+                cells.append(f'<td class="team-cell">{escape(str(row[column]))}</td>')
+            elif column == "group":
+                cells.append(f'<td class="rating-cell team-info-cell">{escape(str(row[column]))}</td>')
+            elif column == "elo":
+                cells.append(f'<td class="rating-cell team-info-cell">{escape(format_elo(float(row[column])) if pd.notna(row[column]) else "-")}</td>')
+            elif column in KNOCKOUT_PROBABILITY_COLUMNS:
+                start_class = " simulation-start" if column == "p_r32" else ""
+                cells.append(
+                    f'<td class="prob-cell simulation-cell{start_class}">'
+                    + green_probability_cell(float(row[column]))
+                    + "</td>"
+                )
+            elif column == "attack_score":
+                lower, upper = rating_bounds[column]
+                cells.append(
+                    '<td class="rating-cell team-info-cell">'
+                    + rating_text_cell(float(row[column]), lower=lower, upper=upper, higher_is_good=True)
+                    + "</td>"
+                )
+            elif column == "defence_score":
+                lower, upper = rating_bounds[column]
+                cells.append(
+                    '<td class="rating-cell team-info-cell">'
+                    + rating_text_cell(float(row[column]), lower=lower, upper=upper, higher_is_good=False)
+                    + "</td>"
+                )
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    width_map = {
+        "team": "25%",
+        "group": "6%",
+        "elo": "7%",
+        "attack_score": "7%",
+        "defence_score": "7%",
+        "p_r32": "8%",
+        "p_r16": "8%",
+        "p_qf": "8%",
+        "p_sf": "8%",
+        "p_final": "8%",
+        "p_champion": "8%",
+    }
+    colgroup = "<colgroup>" + "".join(f'<col style="width:{width_map.get(column, "8%")}">' for column in columns) + "</colgroup>"
+    return (
+        '<div class="minimal-table-wrap">'
+        '<table class="minimal-table knockout-prob-table">'
+        f"{colgroup}<thead>{section_header}<tr>{header}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody>"
+        "</table>"
+        "</div>"
+    )
+teams = cached_teams()
+initial_elos = cached_elos()
+name_to_id = dict(zip(teams["team_name"], teams["team_id"]))
+folders = list_output_folders(OUTPUTS_DIR)
+
+if not folders:
+    render_note("No precomputed output folders found. Run scripts/run_simulations.py first.")
+    st.stop()
+
+selected = OUTPUTS_DIR / CURRENT_OUTPUT_FOLDER
+if selected not in folders:
+    selected = folders[0]
+modified_token = max(
+    (selected / filename).stat().st_mtime
+    for filename in ("metadata.json", "group_phase_results.csv", "knockout_phase_results.csv")
+)
+
+try:
+    output = cached_output(str(selected), modified_token)
+except Exception as exc:
+    st.error(str(exc))
+    st.stop()
+
+st.markdown(
+    '<div class="dashboard-title-row">'
+    '<h1 class="dashboard-title">World Cup 2026 Simulation Dashboard</h1>'
+    '<a class="dashboard-linkedin" href="https://www.linkedin.com/in/ibe-troch-9744a8269/" target="_blank" rel="noopener noreferrer">LinkedIn</a>'
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+group_tab, knockout_tab = st.tabs(["Group Phase", "Knock-out Phase"])
+with group_tab:
+    render_group_phase(output.group_phase, name_to_id)
+with knockout_tab:
+    render_knockout_phase(output.knockout_phase, output.team_ratings, name_to_id, teams, initial_elos)

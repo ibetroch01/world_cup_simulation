@@ -1,0 +1,19 @@
+{
+  "training_start_date": "2022-01-01",
+  "training_end_date": "2026-06-09",
+  "half_life_days": 730.0,
+  "regularization_alpha": 0.001,
+  "min_matches_per_team": 15,
+  "n_matches": 4419,
+  "n_matches_before_universe_filter": 4562,
+  "n_matches_removed_by_universe_filter": 143,
+  "n_teams_before_universe_filter": 261,
+  "n_teams_training_universe": 210,
+  "base_rate": 1.7361924521488084,
+  "home_advantage": 1.269261914548328,
+  "final_nll": 10253.379227821706,
+  "observed_goals_per_match": 2.677981443765558,
+  "predicted_goals_per_match": 2.7096944152380957,
+  "observed_draw_rate": 0.23444218148902465,
+  "predicted_draw_rate": 0.218437886959342
+}
