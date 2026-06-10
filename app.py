@@ -20,6 +20,7 @@ st.set_page_config(page_title="World Cup 2026 Simulator", layout="wide")
 apply_fan_festival_theme()
 
 HEADER_IMAGE_PATH = Path(__file__).parent / "assets" / "worldcup-header.png"
+DEFAULT_N_SIMULATIONS = 50_000
 
 
 @st.cache_data(show_spinner=False)
@@ -294,9 +295,41 @@ def render_knockout(sample_result, teams: pd.DataFrame) -> None:
                 render_match_card(match, team_names)
 
 
+def store_simulation_results(
+    n_simulations: int,
+    teams: pd.DataFrame,
+    elos: dict[str, float],
+    slots: pd.DataFrame,
+    mapping: pd.DataFrame,
+    config: SimulationConfig,
+    progress_callback=None,
+) -> None:
+    run_config = config
+    if run_config.random_seed is None:
+        run_config = replace(run_config, random_seed=secrets.randbits(32))
+    probability_table, champion_table, sample_result = run_simulations(
+        int(n_simulations),
+        teams,
+        elos,
+        slots,
+        mapping,
+        run_config,
+        progress_callback=progress_callback,
+    )
+    st.session_state["probability_table"] = probability_table
+    st.session_state["champion_table"] = champion_table
+    st.session_state["sample_result"] = sample_result
+    st.session_state["run_config"] = run_config
+    st.session_state["run_n_simulations"] = int(n_simulations)
+
+
 default_teams, default_elo_df, r32_slots, third_mapping = cached_default_data()
 teams_df = default_teams.copy()
 elo_df = default_elo_df.copy()
+
+if st.session_state.pop("default_results_loaded", False):
+    for stale_result_key in ("probability_table", "champion_table", "sample_result", "run_config", "run_n_simulations"):
+        st.session_state.pop(stale_result_key, None)
 
 render_hero()
 
@@ -309,11 +342,11 @@ with setup_tab:
     with top_controls[0]:
         n_simulations = st.slider(
             "Simulation runs",
-            min_value=1,
-            max_value=5000,
-            value=250,
-            step=50,
-            key="setup_n_simulations",
+            min_value=1_000,
+            max_value=100_000,
+            value=DEFAULT_N_SIMULATIONS,
+            step=1_000,
+            key="setup_n_simulations_v2",
         )
     with top_controls[1]:
         random_seed = st.slider("Random seed", min_value=0, max_value=1_000_000, value=42, step=1, key="setup_seed")
@@ -371,27 +404,19 @@ with setup_tab:
     render_control_scoreboard(config, int(n_simulations))
     if st.button("Run simulations", type="primary"):
         progress = st.progress(0.0)
-        run_config = config
-        if run_config.random_seed is None:
-            run_config = replace(run_config, random_seed=secrets.randbits(32))
         try:
-            probability_table, champion_table, sample_result = run_simulations(
+            store_simulation_results(
                 int(n_simulations),
                 st.session_state["input_teams"],
                 st.session_state["input_elos"],
                 r32_slots,
                 third_mapping,
-                run_config,
+                config,
                 progress_callback=progress.progress,
             )
         except Exception as exc:
             st.error(str(exc))
         else:
-            st.session_state["probability_table"] = probability_table
-            st.session_state["champion_table"] = champion_table
-            st.session_state["sample_result"] = sample_result
-            st.session_state["run_config"] = run_config
-            st.session_state["run_n_simulations"] = int(n_simulations)
             st.success("Simulation complete.")
 
 with groups_tab:
