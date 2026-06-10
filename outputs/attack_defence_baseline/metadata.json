@@ -1,0 +1,19 @@
+{
+  "model": "attack_defence",
+  "runs": 100000,
+  "seed": 42,
+  "created_at": "2026-06-10T20:20:12.517935+00:00",
+  "parameters": {
+    "ratings_file": "data/team_attack_defence_ratings.csv",
+    "training_report": "data/model_training_report.json",
+    "base_rate": 1.7361924521488084,
+    "goals_scale": 1.0,
+    "strength_temperature": 0.8,
+    "penalty_damping": 900.0
+  },
+  "ratings_file": "team_ratings.csv",
+  "diagnostics": {
+    "avg_goals_per_match": 2.527421153846154,
+    "draw_rate_90": 0.24487663461538461
+  }
+}
