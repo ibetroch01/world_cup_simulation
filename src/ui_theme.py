@@ -22,9 +22,18 @@ def apply_minimal_theme() -> None:
             color: var(--ui-ink);
         }
 
+        header[data-testid="stHeader"],
+        div[data-testid="stToolbar"],
+        div[data-testid="stDecoration"],
+        #MainMenu {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+        }
+
         .block-container {
             max-width: 1440px;
-            padding-top: 1.25rem;
+            padding-top: 0.9rem;
             padding-bottom: 2.5rem;
         }
 
