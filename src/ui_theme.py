@@ -466,6 +466,268 @@ def apply_fan_festival_theme() -> None:
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
+
+        @media (max-width: 760px) {
+            .block-container {
+                padding: 0.75rem 0.7rem 2rem 0.7rem;
+            }
+
+            div[data-testid="stVerticalBlock"] {
+                gap: 0.55rem !important;
+            }
+
+            h3 {
+                font-size: 1.08rem;
+                margin-bottom: 0.55rem;
+            }
+
+            div[data-testid="stTabs"] [role="tablist"] {
+                display: flex;
+                gap: 0.35rem;
+                overflow-x: auto;
+                overflow-y: hidden;
+                flex-wrap: nowrap;
+                padding-bottom: 0.35rem;
+                scrollbar-width: none;
+            }
+
+            div[data-testid="stTabs"] [role="tablist"]::-webkit-scrollbar {
+                display: none;
+            }
+
+            div[data-testid="stTabs"] button[role="tab"] {
+                flex: 0 0 auto;
+                min-height: 2.35rem;
+                padding: 0.3rem 0.68rem;
+                margin-right: 0;
+                font-size: 0.86rem;
+            }
+
+            div[data-testid="stTabs"] [data-baseweb="tab-border"] {
+                display: none;
+            }
+
+            div[data-testid="stHorizontalBlock"] {
+                flex-wrap: wrap;
+                gap: 0.65rem !important;
+            }
+
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+                flex: 1 1 100% !important;
+                width: 100% !important;
+                min-width: 100% !important;
+            }
+
+            .wc-header-shell {
+                margin-bottom: 0.9rem;
+            }
+
+            .wc-header-image {
+                height: 8.8rem !important;
+                object-fit: cover !important;
+                object-position: 28% center !important;
+                border-radius: 12px;
+                box-shadow: 0 14px 36px rgba(7, 16, 20, 0.22);
+            }
+
+            div[data-testid="stSlider"] {
+                padding-bottom: 0.25rem;
+            }
+
+            div[data-testid="stSlider"] label,
+            div[data-testid="stRadio"] label {
+                min-height: 1.55rem;
+            }
+
+            div[data-testid="stSlider"] [data-baseweb="slider"] {
+                min-height: 2.35rem;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }
+
+            div[data-testid="stSlider"] [role="slider"] {
+                width: 1.05rem !important;
+                height: 1.05rem !important;
+            }
+
+            div[data-testid="stRadio"] [role="radiogroup"] {
+                transform: none;
+                gap: 0.4rem;
+                align-items: stretch;
+                flex-wrap: wrap;
+                padding-top: 0.35rem;
+            }
+
+            div[data-testid="stRadio"] [role="radio"] {
+                min-height: 2.35rem;
+                padding: 0.35rem 0.72rem;
+            }
+
+            .stButton > button {
+                width: 100%;
+                min-height: 3.1rem;
+            }
+
+            .wc-control-grid {
+                grid-template-columns: 1fr;
+                gap: 0.55rem;
+            }
+
+            .wc-control-tile {
+                padding: 0.72rem 0.8rem;
+            }
+
+            .wc-control-value {
+                font-size: 1.32rem;
+            }
+
+            .wc-card {
+                padding: 0.82rem;
+                margin-bottom: 0.78rem;
+                box-shadow: 0 10px 26px rgba(7, 16, 20, 0.08);
+            }
+
+            .wc-card-title {
+                font-size: 0.96rem;
+                gap: 0.5rem;
+                margin-bottom: 0.7rem;
+            }
+
+            .wc-team-row {
+                grid-template-columns: minmax(0, 1fr) auto;
+                row-gap: 0.22rem;
+                padding: 0.42rem 0;
+            }
+
+            .wc-team-main {
+                font-size: 0.88rem;
+            }
+
+            .wc-team-meta {
+                font-size: 0.72rem;
+            }
+
+            .wc-rank-chip {
+                min-width: 2.25rem;
+                font-size: 0.7rem;
+            }
+
+            .wc-result-card {
+                min-height: 0;
+            }
+
+            .wc-prob-row {
+                grid-template-columns: 2.7rem minmax(0, 1fr) 3.1rem;
+                gap: 0.42rem;
+                font-size: 0.72rem;
+                padding: 0.34rem 0;
+            }
+
+            .wc-prob-track,
+            .wc-winner-track {
+                height: 0.4rem;
+            }
+
+            .wc-winner-row {
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 0.38rem 0.65rem;
+                padding: 0.5rem 0;
+            }
+
+            .wc-winner-track {
+                grid-column: 1 / -1;
+                grid-row: 2;
+            }
+
+            .wc-winner-team {
+                font-size: 0.86rem;
+            }
+
+            .wc-winner-pct {
+                font-size: 0.82rem;
+            }
+
+            .wc-sample-row {
+                grid-template-columns: auto minmax(0, 1fr) auto;
+                gap: 0.42rem;
+            }
+
+            .wc-sample-row .wc-team-meta:last-child {
+                grid-column: 2 / -1;
+                justify-self: start;
+            }
+
+            .wc-bracket-card {
+                padding: 0.95rem 0.75rem 0.75rem 0.75rem;
+            }
+
+            .wc-scoreline {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 0.35rem 0.55rem;
+                align-items: center;
+                justify-content: start;
+            }
+
+            .wc-scoreline span:not(.wc-score) {
+                overflow-wrap: anywhere;
+                min-width: 0;
+            }
+
+            .wc-scoreline span:nth-child(3) {
+                grid-column: 1 / -1;
+            }
+
+            .wc-score {
+                padding: 0.22rem 0.5rem;
+                font-size: 0.86rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .block-container {
+                padding-left: 0.55rem;
+                padding-right: 0.55rem;
+            }
+
+            .wc-header-image {
+                height: 7.6rem !important;
+                object-position: 18% center !important;
+            }
+
+            div[data-testid="stTabs"] button[role="tab"] {
+                min-height: 2.2rem;
+                padding: 0.25rem 0.58rem;
+                font-size: 0.8rem;
+            }
+
+            .wc-card {
+                padding: 0.72rem;
+            }
+
+            .wc-card-title {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .wc-prob-row {
+                grid-template-columns: 2.35rem minmax(0, 1fr) 2.75rem;
+                gap: 0.32rem;
+                font-size: 0.68rem;
+            }
+
+            .wc-scoreline {
+                grid-template-columns: 1fr;
+            }
+
+            .wc-scoreline span:nth-child(3) {
+                grid-column: auto;
+            }
+
+            .wc-score {
+                justify-self: start;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
