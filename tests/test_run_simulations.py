@@ -100,7 +100,11 @@ def test_run_simulations_cli_writes_live_metadata(tmp_path):
     ).to_csv(ratings_file, index=False)
     report_file.write_text(json.dumps({"base_rate": 1.3}))
     pd.DataFrame(
-        columns=["phase", "match_id", "group", "team_a", "team_b", "goals_a", "goals_b", "winner_team", "played_at"]
+        [
+            {"phase": "group", "match_id": "", "group": "A", "team_a": "MEX", "team_b": "RSA", "goals_a": 2, "goals_b": 0, "winner_team": "", "played_at": "2026-06-11"},
+            {"phase": "group", "match_id": "", "group": "A", "team_a": "KOR", "team_b": "CZE", "goals_a": 2, "goals_b": 1, "winner_team": "", "played_at": "2026-06-11"},
+        ],
+        columns=["phase", "match_id", "group", "team_a", "team_b", "goals_a", "goals_b", "winner_team", "played_at"],
     ).to_csv(locked_file, index=False)
     subprocess.run(
         [
@@ -125,5 +129,6 @@ def test_run_simulations_cli_writes_live_metadata(tmp_path):
     metadata = json.loads((output_dir / "metadata.json").read_text())
     assert metadata["live_early_prediction"] is True
     assert metadata["locked_matches_file"] == str(locked_file)
-    assert metadata["locked_matches_count"] == 0
-    assert metadata["latest_locked_match_at"] is None
+    assert metadata["locked_matches_count"] == 2
+    assert metadata["latest_locked_match_at"] == "2026-06-11"
+    assert metadata["latest_locked_match_label"] == "South Korea 2-1 Czechia"

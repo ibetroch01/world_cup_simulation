@@ -128,6 +128,17 @@ def render_note(message: str) -> None:
     st.markdown(f'<div class="minimal-note">{escape(message)}</div>', unsafe_allow_html=True)
 
 
+def live_prediction_note(metadata: dict) -> str:
+    locked_count = int(metadata.get("locked_matches_count") or 0)
+    latest_label = metadata.get("latest_locked_match_label")
+    latest_at = metadata.get("latest_locked_match_at")
+    if latest_label and latest_at:
+        return f"Live prediction: {locked_count} locked matches. Latest update: {latest_label}, {latest_at}."
+    if latest_at:
+        return f"Live prediction: {locked_count} locked matches. Latest update: {latest_at}."
+    return f"Live prediction: {locked_count} locked matches. Latest update: not updated."
+
+
 def build_group_display(group_phase: pd.DataFrame, name_to_id: dict[str, str]) -> pd.DataFrame:
     display = group_phase.copy()
     display["p_r32"] = display["p_advance_group"] + display["p_advance_best_third"]
@@ -370,6 +381,7 @@ prediction_mode = st.radio(
     list(PREDICTION_OUTPUT_FOLDERS),
     horizontal=True,
     label_visibility="collapsed",
+    key="prediction_mode",
 )
 selected = OUTPUTS_DIR / PREDICTION_OUTPUT_FOLDERS[prediction_mode]
 if not selected.exists():
@@ -388,12 +400,16 @@ except Exception as exc:
     st.stop()
 
 if output.metadata.get("live_early_prediction"):
-    locked_count = int(output.metadata.get("locked_matches_count") or 0)
-    latest = output.metadata.get("latest_locked_match_at") or "not updated"
-    render_note(f"Live prediction: {locked_count} locked matches. Latest locked match: {latest}.")
+    render_note(live_prediction_note(output.metadata))
 
-group_tab, knockout_tab = st.tabs(["Group Phase", "Knock-out Phase"])
-with group_tab:
+dashboard_tab = st.radio(
+    "Dashboard tab",
+    ["Group Phase", "Knock-out Phase"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="dashboard_tab",
+)
+if dashboard_tab == "Group Phase":
     render_group_phase(output.group_phase, name_to_id)
-with knockout_tab:
+else:
     render_knockout_phase(output.knockout_phase, output.team_ratings, name_to_id, teams, initial_elos)

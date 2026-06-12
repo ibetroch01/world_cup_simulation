@@ -5,7 +5,7 @@ import json
 import pandas as pd
 import pytest
 
-from app import build_group_display, build_knockout_display, render_group_table, render_knockout_table
+from app import build_group_display, build_knockout_display, live_prediction_note, render_group_table, render_knockout_table
 from src.results_loader import load_simulation_output
 
 
@@ -96,6 +96,23 @@ def test_knockout_display_works_without_ratings():
     display, has_ratings = build_knockout_display(knockout, None, {"Spain": "ESP"})
     assert not has_ratings
     assert "attack_score" not in display.columns
+
+
+def test_live_prediction_note_uses_latest_match_label_or_date():
+    assert (
+        live_prediction_note(
+            {
+                "locked_matches_count": 2,
+                "latest_locked_match_label": "South Korea 2-1 Czechia",
+                "latest_locked_match_at": "2026-06-11",
+            }
+        )
+        == "Live prediction: 2 locked matches. Latest update: South Korea 2-1 Czechia, 2026-06-11."
+    )
+    assert (
+        live_prediction_note({"locked_matches_count": 2, "latest_locked_match_at": "2026-06-11"})
+        == "Live prediction: 2 locked matches. Latest update: 2026-06-11."
+    )
 
 
 def test_knockout_table_display_has_user_friendly_columns():

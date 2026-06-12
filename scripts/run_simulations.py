@@ -42,6 +42,14 @@ def metadata_path(value: str) -> str:
         return value
 
 
+def locked_match_label(locked_match, team_names: dict[str, str]) -> str | None:
+    if locked_match is None:
+        return None
+    team_a = team_names.get(locked_match.team_a, locked_match.team_a)
+    team_b = team_names.get(locked_match.team_b, locked_match.team_b)
+    return f"{team_a} {locked_match.goals_a}-{locked_match.goals_b} {team_b}"
+
+
 def main() -> None:
     args = parse_args()
     teams, elos, slots, mapping = load_all_data()
@@ -113,11 +121,17 @@ def main() -> None:
             "locked_matches_file": metadata_path(args.locked_matches) if args.live_early_prediction else None,
             "locked_matches_count": locked_matches.count if args.live_early_prediction else 0,
             "latest_locked_match_at": locked_matches.latest_played_at if args.live_early_prediction else None,
+            "latest_locked_match_label": locked_match_label(locked_matches.latest_match, team_names)
+            if args.live_early_prediction
+            else None,
         },
         "live_early_prediction": args.live_early_prediction,
         "locked_matches_file": metadata_path(args.locked_matches) if args.live_early_prediction else None,
         "locked_matches_count": locked_matches.count if args.live_early_prediction else 0,
         "latest_locked_match_at": locked_matches.latest_played_at if args.live_early_prediction else None,
+        "latest_locked_match_label": locked_match_label(locked_matches.latest_match, team_names)
+        if args.live_early_prediction
+        else None,
         "ratings_file": "team_ratings.csv",
         "diagnostics": diagnostics,
     }

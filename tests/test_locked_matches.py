@@ -61,6 +61,23 @@ def test_knockout_draw_requires_winner_team():
         raise AssertionError("expected knockout draw without winner_team to fail")
 
 
+def test_latest_locked_match_uses_played_at_then_csv_order():
+    teams = load_teams()
+    locked = validate_locked_matches(
+        locked_rows(
+            [
+                {"phase": "group", "match_id": "", "group": "A", "team_a": "MEX", "team_b": "RSA", "goals_a": 2, "goals_b": 0, "winner_team": "", "played_at": "2026-06-11"},
+                {"phase": "group", "match_id": "", "group": "A", "team_a": "KOR", "team_b": "CZE", "goals_a": 2, "goals_b": 1, "winner_team": "", "played_at": "2026-06-11"},
+            ]
+        ),
+        teams,
+    )
+    assert locked.latest_played_at == "2026-06-11"
+    assert locked.latest_match is not None
+    assert locked.latest_match.team_a == "KOR"
+    assert locked.latest_match.team_b == "CZE"
+
+
 def test_locked_group_match_influences_group_table():
     teams, elos, slots, mapping = load_all_data()
     locked = validate_locked_matches(

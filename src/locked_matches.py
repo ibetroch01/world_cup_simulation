@@ -51,6 +51,7 @@ class LockedMatchIndex:
     group_matches: dict[tuple[str, frozenset[str]], LockedMatch]
     knockout_matches: dict[str, LockedMatch]
     latest_played_at: str | None
+    latest_match: LockedMatch | None
 
     @property
     def count(self) -> int:
@@ -64,7 +65,7 @@ class LockedMatchIndex:
 
 
 def empty_locked_match_index() -> LockedMatchIndex:
-    return LockedMatchIndex(group_matches={}, knockout_matches={}, latest_played_at=None)
+    return LockedMatchIndex(group_matches={}, knockout_matches={}, latest_played_at=None, latest_match=None)
 
 
 def valid_knockout_match_ids() -> set[str]:
@@ -97,6 +98,7 @@ def validate_locked_matches(raw: pd.DataFrame, teams: pd.DataFrame) -> LockedMat
     group_matches: dict[tuple[str, frozenset[str]], LockedMatch] = {}
     knockout_matches: dict[str, LockedMatch] = {}
     latest_played_at: str | None = None
+    latest_match: LockedMatch | None = None
 
     for row_number, row in enumerate(raw.itertuples(index=False), start=2):
         values = {column: str(getattr(row, column)).strip() for column in LOCKED_MATCH_COLUMNS}
@@ -159,11 +161,13 @@ def validate_locked_matches(raw: pd.DataFrame, teams: pd.DataFrame) -> LockedMat
                 raise ValueError(f"locked_matches.csv row {row_number}: duplicate locked knockout match")
             knockout_matches[match.match_id] = match
 
-        if match.played_at and (latest_played_at is None or match.played_at > latest_played_at):
+        if match.played_at and (latest_played_at is None or match.played_at >= latest_played_at):
             latest_played_at = match.played_at
+            latest_match = match
 
     return LockedMatchIndex(
         group_matches=group_matches,
         knockout_matches=knockout_matches,
         latest_played_at=latest_played_at,
+        latest_match=latest_match,
     )
