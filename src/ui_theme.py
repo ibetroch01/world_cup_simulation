@@ -118,6 +118,18 @@ def apply_minimal_theme() -> None:
             font-weight: 650 !important;
         }
 
+        div[role="radiogroup"] {
+            gap: 0.4rem;
+            margin-bottom: 0.85rem;
+        }
+
+        div[role="radiogroup"] label {
+            background: var(--ui-surface);
+            border: 1px solid var(--ui-line);
+            border-radius: 999px;
+            padding: 0.22rem 0.7rem;
+        }
+
         .minimal-card {
             background: var(--ui-surface);
             border: 1px solid var(--ui-line);

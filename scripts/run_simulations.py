@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 from src.attack_defence_model import load_attack_defence_model
 from src.config import DATA_DIR, SimulationConfig
 from src.data_loader import load_all_data
+from src.locked_matches import empty_locked_match_index, load_locked_matches
 from src.simulation import run_standard_simulations
 
 
@@ -27,8 +28,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--training-report", default=str(DATA_DIR / "model_training_report.json"))
     parser.add_argument("--penalty-damping", type=float, default=900.0)
     parser.add_argument("--goals-scale", type=float, default=1.0)
-    parser.add_argument("--strength-temperature", type=float, default=0.83)
+    parser.add_argument("--strength-temperature", type=float, default=0.8)
+    parser.add_argument("--live-early-prediction", action="store_true")
+    parser.add_argument("--locked-matches", default=str(DATA_DIR / "locked_matches.csv"))
     return parser.parse_args()
+
+
+def metadata_path(value: str) -> str:
+    path = Path(value)
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return value
 
 
 def main() -> None:
@@ -44,6 +55,12 @@ def main() -> None:
 
     def goal_model(team_a: str, team_b: str) -> tuple[float, float]:
         return attack_defence.expected_goals(team_names.get(team_a, team_a), team_names.get(team_b, team_b))
+
+    locked_matches = (
+        load_locked_matches(Path(args.locked_matches), teams)
+        if args.live_early_prediction
+        else empty_locked_match_index()
+    )
 
     team_ratings_rows = []
     for row in teams.sort_values(["group", "team_name"]).itertuples(index=False):
@@ -75,6 +92,7 @@ def main() -> None:
         mapping,
         config,
         goal_model=goal_model,
+        locked_matches=locked_matches if args.live_early_prediction else None,
     )
 
     output_dir = Path(args.output_dir)
@@ -85,13 +103,21 @@ def main() -> None:
         "seed": args.seed,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "parameters": {
-            "ratings_file": args.ratings_file,
-            "training_report": args.training_report,
+            "ratings_file": metadata_path(args.ratings_file),
+            "training_report": metadata_path(args.training_report),
             "base_rate": attack_defence.base_rate,
             "goals_scale": args.goals_scale,
             "strength_temperature": args.strength_temperature,
             "penalty_damping": args.penalty_damping,
+            "live_early_prediction": args.live_early_prediction,
+            "locked_matches_file": metadata_path(args.locked_matches) if args.live_early_prediction else None,
+            "locked_matches_count": locked_matches.count if args.live_early_prediction else 0,
+            "latest_locked_match_at": locked_matches.latest_played_at if args.live_early_prediction else None,
         },
+        "live_early_prediction": args.live_early_prediction,
+        "locked_matches_file": metadata_path(args.locked_matches) if args.live_early_prediction else None,
+        "locked_matches_count": locked_matches.count if args.live_early_prediction else 0,
+        "latest_locked_match_at": locked_matches.latest_played_at if args.live_early_prediction else None,
         "ratings_file": "team_ratings.csv",
         "diagnostics": diagnostics,
     }

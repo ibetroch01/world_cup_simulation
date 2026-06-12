@@ -24,7 +24,7 @@ class AttackDefenceModel:
     ratings: dict[str, AttackDefenceRating]
     base_rate: float
     goals_scale: float = 1.0
-    strength_temperature: float = 0.83
+    strength_temperature: float = 0.8
 
     def rating_for(self, team: str) -> AttackDefenceRating:
         rating = self.ratings.get(team)
@@ -51,7 +51,7 @@ def load_attack_defence_model(
     ratings_file: Path,
     training_report: Path,
     goals_scale: float = 1.0,
-    strength_temperature: float = 0.83,
+    strength_temperature: float = 0.8,
 ) -> AttackDefenceModel:
     ratings_df = pd.read_csv(ratings_file)
     required = {"team", "attack_score", "defence_score", "overall_score", "matches_used"}

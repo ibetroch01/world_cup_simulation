@@ -10,6 +10,7 @@ import pandas as pd
 
 from .bracket import QUARTERFINAL_LINKS, ROUND_OF_16_LINKS, SEMIFINAL_LINKS
 from .config import SimulationConfig
+from .locked_matches import LockedMatch, LockedMatchIndex
 
 
 PROBABILITY_STAGES = ["Round of 32", "Round of 16", "Quarterfinal", "Semifinal", "Final", "Champion"]
@@ -109,7 +110,24 @@ def _play_knockout_fast(
     config: SimulationConfig,
     rng,
     goal_model: GoalModel,
+    match_id: str,
+    locked_match: LockedMatch | None = None,
 ) -> tuple[str, int, int, bool]:
+    if locked_match is not None:
+        if {team_a, team_b} != {locked_match.team_a, locked_match.team_b}:
+            raise ValueError(
+                f"Locked knockout match {match_id} expects {locked_match.team_a} vs {locked_match.team_b}, "
+                f"but this simulation produced {team_a} vs {team_b}. Lock the preceding matches first."
+            )
+        if team_a == locked_match.team_a:
+            goals_a, goals_b = locked_match.goals_a, locked_match.goals_b
+        else:
+            goals_a, goals_b = locked_match.goals_b, locked_match.goals_a
+        winner = locked_match.winner
+        if winner is None:
+            raise ValueError(f"Locked knockout match {match_id} has no winner")
+        return winner, goals_a, goals_b, goals_a == goals_b
+
     goals_a, goals_b = _goal_pair(team_a, team_b, rng, goal_model)
     if goals_a > goals_b:
         winner = team_a
@@ -127,6 +145,7 @@ def _simulate_tournament_summary(
     config: SimulationConfig,
     rng,
     goal_model: GoalModel,
+    locked_matches: LockedMatchIndex | None = None,
 ) -> dict[str, Any]:
     stage_levels = {team_id: 0 for team_id in prepared["team_ids"]}
     group_tables: dict[str, list[dict[str, Any]]] = {}
@@ -153,7 +172,14 @@ def _simulate_tournament_summary(
         }
         group_matches = []
         for team_a, team_b in combinations(team_ids, 2):
-            goals_a, goals_b = _goal_pair(team_a, team_b, rng, goal_model)
+            locked_match = locked_matches.group_match(group, team_a, team_b) if locked_matches is not None else None
+            if locked_match is not None:
+                if team_a == locked_match.team_a:
+                    goals_a, goals_b = locked_match.goals_a, locked_match.goals_b
+                else:
+                    goals_a, goals_b = locked_match.goals_b, locked_match.goals_a
+            else:
+                goals_a, goals_b = _goal_pair(team_a, team_b, rng, goal_model)
             total_goals += goals_a + goals_b
             total_matches += 1
             draws_90 += int(goals_a == goals_b)
@@ -212,7 +238,17 @@ def _simulate_tournament_summary(
         winners = {}
         losers = {}
         for match_id, team_a, team_b in pairings:
-            winner, goals_a, goals_b, draw_90 = _play_knockout_fast(team_a, team_b, initial_elos, config, rng, goal_model)
+            locked_match = locked_matches.knockout_match(match_id) if locked_matches is not None else None
+            winner, goals_a, goals_b, draw_90 = _play_knockout_fast(
+                team_a,
+                team_b,
+                initial_elos,
+                config,
+                rng,
+                goal_model,
+                match_id,
+                locked_match,
+            )
             loser = team_b if winner == team_a else team_a
             winners[match_id] = winner
             losers[match_id] = loser
@@ -264,6 +300,7 @@ def run_standard_simulations(
     third_mapping: pd.DataFrame,
     config: SimulationConfig,
     goal_model: GoalModel,
+    locked_matches: LockedMatchIndex | None = None,
     progress_callback=None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:
     if n_simulations <= 0:
@@ -285,7 +322,7 @@ def run_standard_simulations(
 
     for ix in range(n_simulations):
         rng = np.random.default_rng(child_seeds[ix])
-        result = _simulate_tournament_summary(prepared, initial_elos, config, rng, goal_model)
+        result = _simulate_tournament_summary(prepared, initial_elos, config, rng, goal_model, locked_matches)
         for team_id in team_ids:
             team_ix = team_index[team_id]
             place = result["group_places"].get(team_id)

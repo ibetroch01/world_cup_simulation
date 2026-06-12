@@ -9,7 +9,7 @@ import streamlit as st
 from src.config import ROOT_DIR
 from src.data_loader import load_initial_elos, load_teams
 from src.flags import team_label
-from src.results_loader import list_output_folders, load_simulation_output
+from src.results_loader import load_simulation_output
 from src.ui_theme import apply_minimal_theme
 
 
@@ -17,7 +17,10 @@ st.set_page_config(page_title="World Cup 2026 Results", layout="wide")
 apply_minimal_theme()
 
 OUTPUTS_DIR = ROOT_DIR / "outputs"
-CURRENT_OUTPUT_FOLDER = "attack_defence_baseline"
+PREDICTION_OUTPUT_FOLDERS = {
+    "World Cup Prediction": "attack_defence_baseline",
+    "Live Prediction": "attack_defence_live",
+}
 GROUP_PROBABILITY_COLUMNS = ["p_place_1", "p_place_2", "p_place_3", "p_place_4", "p_r32", "p_eliminated_group"]
 KNOCKOUT_PROBABILITY_COLUMNS = ["p_r32", "p_r16", "p_qf", "p_sf", "p_final", "p_champion"]
 GROUP_COLUMN_LABELS = {
@@ -353,15 +356,26 @@ def render_knockout_table(display: pd.DataFrame, has_ratings: bool) -> str:
 teams = cached_teams()
 initial_elos = cached_elos()
 name_to_id = dict(zip(teams["team_name"], teams["team_id"]))
-folders = list_output_folders(OUTPUTS_DIR)
 
-if not folders:
-    render_note("No precomputed output folders found. Run scripts/run_simulations.py first.")
+st.markdown(
+    '<div class="dashboard-title-row">'
+    '<h1 class="dashboard-title">World Cup 2026 Simulation Dashboard</h1>'
+    '<a class="dashboard-linkedin" href="https://www.linkedin.com/in/ibe-troch-9744a8269/" target="_blank" rel="noopener noreferrer">LinkedIn</a>'
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+prediction_mode = st.radio(
+    "Prediction mode",
+    list(PREDICTION_OUTPUT_FOLDERS),
+    horizontal=True,
+    label_visibility="collapsed",
+)
+selected = OUTPUTS_DIR / PREDICTION_OUTPUT_FOLDERS[prediction_mode]
+if not selected.exists():
+    render_note(f"{prediction_mode} output is not available yet. Run scripts/run_simulations.py for {selected.name}.")
     st.stop()
 
-selected = OUTPUTS_DIR / CURRENT_OUTPUT_FOLDER
-if selected not in folders:
-    selected = folders[0]
 modified_token = max(
     (selected / filename).stat().st_mtime
     for filename in ("metadata.json", "group_phase_results.csv", "knockout_phase_results.csv")
@@ -373,13 +387,10 @@ except Exception as exc:
     st.error(str(exc))
     st.stop()
 
-st.markdown(
-    '<div class="dashboard-title-row">'
-    '<h1 class="dashboard-title">World Cup 2026 Simulation Dashboard</h1>'
-    '<a class="dashboard-linkedin" href="https://www.linkedin.com/in/ibe-troch-9744a8269/" target="_blank" rel="noopener noreferrer">LinkedIn</a>'
-    "</div>",
-    unsafe_allow_html=True,
-)
+if output.metadata.get("live_early_prediction"):
+    locked_count = int(output.metadata.get("locked_matches_count") or 0)
+    latest = output.metadata.get("latest_locked_match_at") or "not updated"
+    render_note(f"Live prediction: {locked_count} locked matches. Latest locked match: {latest}.")
 
 group_tab, knockout_tab = st.tabs(["Group Phase", "Knock-out Phase"])
 with group_tab:

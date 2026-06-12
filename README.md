@@ -1,6 +1,6 @@
 # FIFA World Cup 2026 Attack/Defence Simulator
 
-CLI-first Monte Carlo simulator for the 48-team FIFA World Cup 2026 format. The Streamlit app is a results dashboard only: it reads the precomputed `outputs/attack_defence_baseline` folder and does not train models or run simulations.
+CLI-first Monte Carlo simulator for the 48-team FIFA World Cup 2026 format. The Streamlit app is a results dashboard only: it reads precomputed output folders and does not train models or run simulations.
 
 ## Workflow
 
@@ -51,13 +51,28 @@ By default this also runs rolling backtests:
 
 The chosen parameters minimize test Poisson NLL. Add `--output-grid data/strength_temperature_grid.csv` if you want to save every fold/grid row.
 
-Run the tournament simulation:
+Run the pre-tournament prediction:
 
 ```bash
 python scripts/run_simulations.py \
   --runs 100000 \
   --seed 42 \
+  --strength-temperature 0.8 \
+  --penalty-damping 900 \
   --output-dir outputs/attack_defence_baseline
+```
+
+Run the live prediction:
+
+```bash
+python scripts/run_simulations.py \
+  --runs 100000 \
+  --seed 42 \
+  --strength-temperature 0.8 \
+  --penalty-damping 900 \
+  --live-early-prediction \
+  --locked-matches data/locked_matches.csv \
+  --output-dir outputs/attack_defence_live
 ```
 
 Start the dashboard:
@@ -75,17 +90,35 @@ Each simulation output folder contains:
 - `knockout_phase_results.csv`
 - `team_ratings.csv`
 
-The dashboard uses `outputs/attack_defence_baseline` by default.
+The dashboard lets you switch between:
+
+- `outputs/attack_defence_baseline`: World Cup Prediction
+- `outputs/attack_defence_live`: Live Prediction
+
+## Live Updates
+
+After a match is played, add its 90-minute score to `data/locked_matches.csv`, rerun the live prediction command, commit the updated CSV and `outputs/attack_defence_live`, then redeploy.
+
+`data/locked_matches.csv` columns:
+
+- `phase`: `group` or `knockout`
+- `match_id`: empty for group matches, required for knockout matches
+- `group`: required for group matches, empty for knockout matches
+- `team_a`, `team_b`: team IDs from `data/teams.csv`
+- `goals_a`, `goals_b`: 90-minute goals
+- `winner_team`: empty for group matches; required for knockout draws after 90 minutes
+- `played_at`: optional date/time used for dashboard metadata
 
 ## Model Notes
 
 - This is Monte Carlo simulation, not MCMC.
 - The dashboard only displays precomputed outputs.
+- World Cup Prediction ignores `data/locked_matches.csv`; Live Prediction uses locked results and simulates only the remaining uncertainty.
 - Attack/Defence training uses 2022-now match results with 90-minute scores only.
 - Penalty shootout results and extra-time goals are excluded from historical training data.
 - Training uses recency weighting, competition weighting, and L2 regularization.
 - Calibration selects `half_life_days`, `regularization_alpha`, and `strength_temperature` by holdout Poisson NLL, not by World Cup winner probabilities.
-- Current defaults use `regularization_alpha=0.01`, `strength_temperature=0.83`, and `penalty_damping=900`.
+- Current defaults use `regularization_alpha=0.01`, `strength_temperature=0.8`, and `penalty_damping=900`.
 - Knockout draws after 90 minutes are resolved by Elo-weighted advancement using `data/initial_elo.csv`.
 - The model is simplified and should be validated by backtesting before being treated as reliable.
 - Annex C third-place mapping is required for exact bracket correctness. If the mapping CSV is incomplete or invalid, the simulator raises a clear error instead of approximating silently.
