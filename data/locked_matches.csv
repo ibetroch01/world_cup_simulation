@@ -1,3 +1,5 @@
 phase,match_id,group,team_a,team_b,goals_a,goals_b,winner_team,played_at
 group,,A,MEX,RSA,2,0,,2026-06-11
 group,,A,KOR,CZE,2,1,,2026-06-11
+group,,B,CAN,BIH,1,1,,2026-06-12
+group,,D,USA,PAR,4,1,,2026-06-12

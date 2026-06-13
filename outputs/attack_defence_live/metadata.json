@@ -2,7 +2,7 @@
   "model": "attack_defence",
   "runs": 100000,
   "seed": 42,
-  "created_at": "2026-06-12T13:15:59.332999+00:00",
+  "created_at": "2026-06-13T09:04:38.137009+00:00",
   "parameters": {
     "ratings_file": "data/team_attack_defence_ratings.csv",
     "training_report": "data/model_training_report.json",
@@ -12,18 +12,18 @@
     "penalty_damping": 900.0,
     "live_early_prediction": true,
     "locked_matches_file": "data/locked_matches.csv",
-    "locked_matches_count": 2,
-    "latest_locked_match_at": "2026-06-11",
-    "latest_locked_match_label": "South Korea 2-1 Czechia"
+    "locked_matches_count": 4,
+    "latest_locked_match_at": "2026-06-12",
+    "latest_locked_match_label": "United States 4-1 Paraguay"
   },
   "live_early_prediction": true,
   "locked_matches_file": "data/locked_matches.csv",
-  "locked_matches_count": 2,
-  "latest_locked_match_at": "2026-06-11",
-  "latest_locked_match_label": "South Korea 2-1 Czechia",
+  "locked_matches_count": 4,
+  "latest_locked_match_at": "2026-06-12",
+  "latest_locked_match_label": "United States 4-1 Paraguay",
   "ratings_file": "team_ratings.csv",
   "diagnostics": {
-    "avg_goals_per_match": 2.5265724038461537,
-    "draw_rate_90": 0.24004798076923076
+    "avg_goals_per_match": 2.5517561538461537,
+    "draw_rate_90": 0.24425
   }
 }
